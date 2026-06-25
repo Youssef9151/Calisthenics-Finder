@@ -1,0 +1,21 @@
+# Dependency directories
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Production builds
+frontend/dist/
+
+# Editor/Tooling directories
+.vscode/
+.idea/
+.eslintcache
+frontend/.vite/
+
+# Local database private data (Exclude user credentials and messages)
+backend/db/users.json
+backend/db/messages.json
+
+# Keep seed data tracked
+!backend/db/spots.json
+!backend/db/reviews.json

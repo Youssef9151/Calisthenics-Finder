@@ -1,0 +1,114 @@
+[
+  {
+    "id": "rev-1",
+    "spotId": "spot-1",
+    "username": "Marcus_Bars",
+    "rating": 5,
+    "comment": "Best park in NY! The high bars are perfect for freestyle and weighted pull-ups. Highly recommend!",
+    "date": "2026-06-20T10:30:00.000Z"
+  },
+  {
+    "id": "rev-2",
+    "spotId": "spot-1",
+    "username": "Sarah_Handstands",
+    "rating": 4,
+    "comment": "Amazing community here. The floor is rubberized which is great for handstands, though it gets crowded after 5 PM.",
+    "date": "2026-06-22T14:15:00.000Z"
+  },
+  {
+    "id": "rev-3",
+    "spotId": "spot-1",
+    "username": "Alex_Calisthenics",
+    "rating": 5,
+    "comment": "The bars are solid and have excellent grip. Meets all my daily workout needs.",
+    "date": "2026-06-23T18:00:00.000Z"
+  },
+  {
+    "id": "rev-4",
+    "spotId": "spot-2",
+    "username": "Jordan_Freestyle",
+    "rating": 4,
+    "comment": "Great view of London while working out! The bars are a bit thick but overall fantastic setup.",
+    "date": "2026-06-21T09:00:00.000Z"
+  },
+  {
+    "id": "rev-5",
+    "spotId": "spot-2",
+    "username": "Sarah_Handstands",
+    "rating": 5,
+    "comment": "Super peaceful in the mornings. There are gymnastics rings here which are rare for public parks!",
+    "date": "2026-06-24T07:45:00.000Z"
+  },
+  {
+    "id": "rev-6",
+    "spotId": "spot-3",
+    "username": "Marcus_Bars",
+    "rating": 5,
+    "comment": "Absolutely legendary. Every calisthenics athlete should visit this place at least once. Equipment is rugged and well-maintained.",
+    "date": "2026-06-18T16:20:00.000Z"
+  },
+  {
+    "id": "rev-7",
+    "spotId": "spot-3",
+    "username": "Jordan_Freestyle",
+    "rating": 5,
+    "comment": "Ropes and rings are in great condition. Training in the sea breeze is incomparable.",
+    "date": "2026-06-19T11:10:00.000Z"
+  },
+  {
+    "id": "rev-8",
+    "spotId": "spot-3",
+    "username": "Alex_Calisthenics",
+    "rating": 4,
+    "comment": "Amazing, but expect lots of tourists taking photos. Best to go early morning.",
+    "date": "2026-06-22T08:00:00.000Z"
+  },
+  {
+    "id": "rev-9",
+    "spotId": "spot-3",
+    "username": "BarFlow99",
+    "rating": 5,
+    "comment": "Incredible atmosphere. Met some of the best athletes here.",
+    "date": "2026-06-24T19:30:00.000Z"
+  },
+  {
+    "id": "rev-10",
+    "spotId": "spot-4",
+    "username": "NileAthlete",
+    "rating": 4,
+    "comment": "Beautiful workout spot next to the Nile. Good parallel bars, clean surroundings.",
+    "date": "2026-06-15T18:00:00.000Z"
+  },
+  {
+    "id": "rev-11",
+    "spotId": "spot-4",
+    "username": "Alex_Calisthenics",
+    "rating": 5,
+    "comment": "Great bars and friendly crowd. Usually easy to find free space to train.",
+    "date": "2026-06-23T19:00:00.000Z"
+  },
+  {
+    "id": "rev-12",
+    "spotId": "spot-5",
+    "username": "AussieBarStar",
+    "rating": 5,
+    "comment": "Training with a view of Bondi Beach is unbeatable. Strong dip bars and high pull-up bars.",
+    "date": "2026-06-17T06:30:00.000Z"
+  },
+  {
+    "id": "rev-13",
+    "spotId": "spot-5",
+    "username": "Marcus_Bars",
+    "rating": 4,
+    "comment": "Equipment gets hot in the midday sun, but it has everything you need. Awesome crowd!",
+    "date": "2026-06-21T15:00:00.000Z"
+  },
+  {
+    "id": "rev-14",
+    "spotId": "spot-5",
+    "username": "Sarah_Handstands",
+    "rating": 5,
+    "comment": "My favorite training spot in Sydney. Clean, safe, and right by the beach.",
+    "date": "2026-06-24T10:00:00.000Z"
+  }
+]

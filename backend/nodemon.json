@@ -1,0 +1,4 @@
+{
+  "watch": ["server.js", "db.js"],
+  "ignore": ["db/*", "db/**/*.json", "db", "db/", "**/db/**"]
+}
