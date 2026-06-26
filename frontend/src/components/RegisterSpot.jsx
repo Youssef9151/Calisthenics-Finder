@@ -25,6 +25,8 @@ export default function RegisterSpot({ prefilledCoords, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [customEqInput, setCustomEqInput] = useState('');
+  const [customEqList, setCustomEqList] = useState([]);
 
   // If the user clicked the map to pin-point, prefill coordinates!
   useEffect(() => {
@@ -53,6 +55,18 @@ export default function RegisterSpot({ prefilledCoords, onSuccess }) {
     });
   };
 
+  const handleAddCustomEquipment = () => {
+    const val = customEqInput.trim();
+    if (val && !customEqList.includes(val) && !formData.equipment.includes(val)) {
+      setCustomEqList(prev => [...prev, val]);
+      setCustomEqInput('');
+    }
+  };
+
+  const handleRemoveCustomEquipment = (item) => {
+    setCustomEqList(prev => prev.filter(x => x !== item));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -77,11 +91,13 @@ export default function RegisterSpot({ prefilledCoords, onSuccess }) {
     setLoading(true);
 
     try {
+      const finalEquipment = [...formData.equipment, ...customEqList];
       const response = await fetch('http://localhost:5000/api/spots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          equipment: finalEquipment,
           lat: latVal,
           lng: lngVal
         })
@@ -99,6 +115,7 @@ export default function RegisterSpot({ prefilledCoords, onSuccess }) {
           lng: '',
           equipment: []
         });
+        setCustomEqList([]);
         setTimeout(() => {
           setSuccess(false);
           if (onSuccess) onSuccess(data);
@@ -170,40 +187,7 @@ export default function RegisterSpot({ prefilledCoords, onSuccess }) {
             />
           </div>
 
-          <div className="lat-lng-group">
-            <div className="form-group">
-              <label htmlFor="lat">Latitude *</label>
-              <input
-                type="number"
-                step="any"
-                id="lat"
-                name="lat"
-                value={formData.lat}
-                onChange={handleInputChange}
-                placeholder="e.g. 51.540600"
-                className="input-field"
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="lng">Longitude *</label>
-              <input
-                type="number"
-                step="any"
-                id="lng"
-                name="lng"
-                value={formData.lng}
-                onChange={handleInputChange}
-                placeholder="e.g. -0.161000"
-                className="input-field"
-                required
-              />
-            </div>
-          </div>
 
-          <p className="coordinate-helper-text">
-            💡 **Tip**: You can also navigate to the **Map Explorer** tab and click anywhere on the map to automatically pin-point and grab coordinates!
-          </p>
 
           <div className="form-group">
             <label>Available Equipment</label>
@@ -218,6 +202,69 @@ export default function RegisterSpot({ prefilledCoords, onSuccess }) {
                   <span>{eqName}</span>
                 </label>
               ))}
+            </div>
+
+            {/* Custom Equipment Input Box */}
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px', display: 'block' }}>Add Custom Equipment (not in the list above)</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="e.g. Parallettes, Chalk, Pegboard..."
+                  className="input-field"
+                  value={customEqInput}
+                  onChange={(e) => setCustomEqInput(e.target.value)}
+                  style={{ flexGrow: 1, fontSize: '0.85rem' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleAddCustomEquipment}
+                  style={{ width: 'auto', padding: '0 16px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+                >
+                  Add Equipment
+                </button>
+              </div>
+
+              {/* Render Custom Equipment Tags */}
+              {customEqList.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                  {customEqList.map((item) => (
+                    <span
+                      key={item}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'var(--bg-darker)',
+                        border: '1px solid var(--border-color)',
+                        padding: '4px 10px',
+                        borderRadius: '16px',
+                        fontSize: '0.8rem',
+                        color: 'var(--text-primary)'
+                      }}
+                    >
+                      {item}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCustomEquipment(item)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--accent-red)',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: '0.85rem',
+                          fontWeight: '800',
+                          lineHeight: 1
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

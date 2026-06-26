@@ -21,7 +21,7 @@ const io = new Server(httpServer, {
 const PORT = process.env.PORT || 5000;
 
 // ==========================================
-// Authentication Routes
+// Authentication & Profile Routes
 // ==========================================
 
 app.post('/api/auth/register', async (req, res) => {
@@ -49,6 +49,10 @@ app.post('/api/auth/register', async (req, res) => {
       friends: [],
       sentRequests: [],
       incomingRequests: [],
+      photo: '',
+      age: null,
+      level: 'Beginner',
+      workoutStreak: 0,
       createdAt: new Date().toISOString()
     };
 
@@ -57,7 +61,14 @@ app.post('/api/auth/register', async (req, res) => {
 
     res.status(201).json({
       message: 'Registration successful',
-      user: { id: newUser.id, username: newUser.username }
+      user: { 
+        id: newUser.id, 
+        username: newUser.username,
+        photo: '',
+        age: null,
+        level: 'Beginner',
+        workoutStreak: 0
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -87,11 +98,58 @@ app.post('/api/auth/login', async (req, res) => {
 
     res.status(200).json({
       message: 'Login successful',
-      user: { id: user.id, username: user.username }
+      user: { 
+        id: user.id, 
+        username: user.username,
+        photo: user.photo || '',
+        age: user.age || null,
+        level: user.level || 'Beginner',
+        workoutStreak: user.workoutStreak || 0
+      }
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// Update Profile
+app.post('/api/profile/update', async (req, res) => {
+  const { username, photo, age, level, workoutStreak } = req.body;
+
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  try {
+    const users = await db.getUsers();
+    const idx = users.findIndex(u => u.username.toLowerCase() === username.toLowerCase());
+
+    if (idx === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (photo !== undefined) users[idx].photo = photo;
+    if (age !== undefined) users[idx].age = age !== null && age !== '' ? parseInt(age) : null;
+    if (level !== undefined) users[idx].level = level;
+    if (workoutStreak !== undefined) users[idx].workoutStreak = parseInt(workoutStreak) || 0;
+
+    await db.saveUsers(users);
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: users[idx].id,
+        username: users[idx].username,
+        photo: users[idx].photo || '',
+        age: users[idx].age || null,
+        level: users[idx].level || 'Beginner',
+        workoutStreak: users[idx].workoutStreak || 0
+      }
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
@@ -180,42 +238,6 @@ app.post('/api/friends/request', async (req, res) => {
       from: senderUser.username,
       to: recipientUser.username
     });
-
-    // Auto-accept simulated database users for single-player testing
-    const botDbUsers = ['CalisthenicsKing', 'BarWorkoutQueen', 'HandstandPro'];
-    if (botDbUsers.includes(recipientUser.username)) {
-      setTimeout(async () => {
-        try {
-          const freshUsers = await db.getUsers();
-          const sU = freshUsers.find(u => u.username.toLowerCase() === sender.toLowerCase());
-          const rU = freshUsers.find(u => u.username.toLowerCase() === recipient.toLowerCase());
-          
-          if (sU && rU) {
-            sU.friends = sU.friends || [];
-            sU.sentRequests = sU.sentRequests || [];
-            rU.friends = rU.friends || [];
-            rU.incomingRequests = rU.incomingRequests || [];
-
-            if (!sU.friends.includes(rU.username)) sU.friends.push(rU.username);
-            if (!rU.friends.includes(sU.username)) rU.friends.push(sU.username);
-
-            sU.sentRequests = sU.sentRequests.filter(name => name !== rU.username);
-            rU.incomingRequests = rU.incomingRequests.filter(name => name !== sU.username);
-
-            await db.saveUsers(freshUsers);
-
-            // Broadcast acceptance
-            io.emit('friend_request_event', {
-              type: 'request_accepted',
-              from: rU.username,
-              to: sU.username
-            });
-          }
-        } catch (e) {
-          console.error('Auto-accept error:', e);
-        }
-      }, 4000);
-    }
 
     res.json({ success: true, message: 'Friend request sent' });
   } catch (error) {
@@ -315,7 +337,7 @@ app.get('/api/friends/pending', async (req, res) => {
   }
 });
 
-// Get active friends list (user-specific list merged with default bots)
+// Get active friends list (user-specific list)
 app.get('/api/friends/list', async (req, res) => {
   const { username } = req.query;
   if (!username) {
@@ -326,33 +348,157 @@ app.get('/api/friends/list', async (req, res) => {
     const users = await db.getUsers();
     const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
     
-    // Seeded bot friends (always available to talk to)
-    const bots = [
-      { id: 'f1', name: 'Alex', status: 'online', statusText: 'Online • Advanced Calisthenics' },
-      { id: 'f2', name: 'Jordan', status: 'offline', statusText: 'Offline • Handstand Specialist' },
-      { id: 'f3', name: 'Sarah', status: 'training', statusText: 'Training • Muscle Beach' },
-      { id: 'f4', name: 'Marcus', status: 'online', statusText: 'Online • Beginner Athlete' }
-    ];
-
-    if (!user) return res.json(bots);
+    if (!user) return res.json([]);
     
     const dbFriendsNames = user.friends || [];
     
     // Create friend cards for db friends (mark as online for simplicity)
-    const dbFriends = dbFriendsNames
-      .filter(fName => !bots.some(b => b.name === fName)) // avoid duplicate bots
-      .map((fName, idx) => {
-        return {
-          id: `db-f-${idx}-${fName}`,
-          name: fName,
-          status: 'online',
-          statusText: 'Online • Training Partner'
-        };
-      });
+    const dbFriends = dbFriendsNames.map((fName, idx) => {
+      const friendUser = users.find(u => u.username.toLowerCase() === fName.toLowerCase());
+      return {
+        id: `db-f-${idx}-${fName}`,
+        name: fName,
+        status: 'online',
+        statusText: 'Online • Training Partner',
+        photo: friendUser ? friendUser.photo : ''
+      };
+    });
 
-    res.json([...bots, ...dbFriends]);
+    res.json(dbFriends);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch friends list' });
+  }
+});
+
+// ==========================================
+// Group Chats Routes
+// ==========================================
+
+// Create a new group
+app.post('/api/groups', async (req, res) => {
+  const { name, members } = req.body;
+
+  if (!name || !Array.isArray(members) || members.length === 0) {
+    return res.status(400).json({ error: 'Group name and members list are required' });
+  }
+
+  try {
+    const groups = await db.getGroups();
+    const newGroup = {
+      id: 'group-' + Date.now(),
+      name,
+      members, // Array of usernames
+      createdAt: new Date().toISOString()
+    };
+
+    groups.push(newGroup);
+    await db.saveGroups(groups);
+
+    // Notify all members via socket to update their sidebar
+    io.emit('group_event', {
+      type: 'group_created',
+      group: newGroup
+    });
+
+    res.status(201).json(newGroup);
+  } catch (error) {
+    console.error('Failed to create group:', error);
+    res.status(500).json({ error: 'Failed to create group chat' });
+  }
+});
+
+// Get user's groups
+app.get('/api/groups', async (req, res) => {
+  const { username } = req.query;
+
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  try {
+    const groups = await db.getGroups();
+    const userGroups = groups.filter(g => 
+      g.members.some(m => m.toLowerCase() === username.toLowerCase())
+    );
+    res.json(userGroups);
+  } catch (error) {
+    console.error('Failed to fetch groups:', error);
+    res.status(500).json({ error: 'Failed to retrieve groups' });
+  }
+});
+
+// Get a user's public profile info
+app.get('/api/users/profile', async (req, res) => {
+  const { username } = req.query;
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  try {
+    const users = await db.getUsers();
+    const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      username: user.username,
+      photo: user.photo || '',
+      age: user.age || null,
+      level: user.level || 'Beginner',
+      workoutStreak: user.workoutStreak || 0,
+      createdAt: user.createdAt
+    });
+  } catch (error) {
+    console.error('Fetch user profile error:', error);
+    res.status(500).json({ error: 'Failed to fetch user profile' });
+  }
+});
+
+// Register workout schedule for a spot (Mark as Going)
+app.post('/api/spots/:id/going', async (req, res) => {
+  const { id } = req.params;
+  const { username, time } = req.body;
+
+  if (!username || !time) {
+    return res.status(400).json({ error: 'Username and time are required' });
+  }
+
+  try {
+    const spots = await db.getSpots();
+    const idx = spots.findIndex(s => s.id === id);
+
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Spot not found' });
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Initialize going array
+    spots[idx].going = spots[idx].going || [];
+
+    // Filter out previous entries for today from this user
+    spots[idx].going = spots[idx].going.filter(g => 
+      !(g.username.toLowerCase() === username.toLowerCase() && g.date === todayStr)
+    );
+
+    // Push new schedule
+    spots[idx].going.push({
+      username,
+      time,
+      date: todayStr
+    });
+
+    await db.saveSpots(spots);
+
+    // Emit live update over socket to all clients
+    io.emit('spot_going_update', { spotId: id, going: spots[idx].going });
+
+    res.json({ success: true, going: spots[idx].going });
+  } catch (error) {
+    console.error('Update spot going error:', error);
+    res.status(500).json({ error: 'Failed to register workout plan' });
   }
 });
 
@@ -459,35 +605,8 @@ app.post('/api/spots/:id/reviews', async (req, res) => {
 
 
 // ==========================================
-// Socket.io Real-Time Messaging & Bot Simulation
+// Socket.io Real-Time Messaging
 // ==========================================
-
-const BOT_RESPONSES = {
-  Alex: [
-    "Awesome! Pull-up bars are my favorite. I'll show you my muscle-up technique.",
-    "Make sure to warm up your rotators. What time are we meeting?",
-    "Nice! Let's do some weighted dips and pullups today.",
-    "Perfect! Just checked the map, looks like a great spot."
-  ],
-  Jordan: [
-    "Perfect. I need to practice my handstands. The floor there is flat right?",
-    "Sounds great. I'll bring the gymnastics rings just in case.",
-    "Let's train! I'm planning to work on front lever progressions today.",
-    "Sure! Let's do a quick flexibility session first."
-  ],
-  Marcus: [
-    "I'm in! Can you help me with my dip form? Still trying to unlock 10 clean reps.",
-    "Let's go. Is there a Swedish wall there? Need to practice my leg raises.",
-    "I'll join. Need to get a solid workout in today.",
-    "Excellent! Let's train hard today."
-  ],
-  Sarah: [
-    "Yes! Love that park. Meet you there in a bit.",
-    "Count me in. Let's do some core conditioning today.",
-    "Awesome. Make sure to bring water, it gets pretty warm under the sun.",
-    "Perfect. I will show you my handstand-walk progression!"
-  ]
-};
 
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
@@ -504,11 +623,14 @@ io.on('connection', (socket) => {
     
     try {
       const messages = await db.getMessages();
+      const isGroup = room.startsWith('group-');
+
       const newMessage = {
         id: 'msg-' + Date.now(),
         senderId,
         senderName,
-        receiverName,
+        receiverName: isGroup ? null : receiverName,
+        groupId: isGroup ? room : null,
         content,
         room,
         isInvite: !!isInvite,
@@ -522,47 +644,6 @@ io.on('connection', (socket) => {
 
       // Emit to room (real-time chat for multiple active users)
       io.to(room).emit('message_received', newMessage);
-
-      // Simulated automated friend response (if messaging a bot)
-      const bots = ['Alex', 'Jordan', 'Marcus', 'Sarah'];
-      if (bots.includes(receiverName) && senderName !== receiverName) {
-        // Trigger simulated typing indicator after a short delay
-        setTimeout(() => {
-          io.to(room).emit('typing_status', { username: receiverName, isTyping: true });
-          
-          // Trigger actual response
-          setTimeout(async () => {
-            io.to(room).emit('typing_status', { username: receiverName, isTyping: false });
-
-            let replyContent = "";
-            if (isInvite) {
-              replyContent = `Hey ${senderName}! Count me in! I'll meet you at ${spotName} at ${inviteTime || 'the scheduled time'}. Let's get it! 💪`;
-            } else {
-              const responses = BOT_RESPONSES[receiverName];
-              replyContent = responses[Math.floor(Math.random() * responses.length)];
-            }
-
-            const botMessage = {
-              id: 'msg-' + (Date.now() + 1),
-              senderId: 'bot-' + receiverName,
-              senderName: receiverName,
-              receiverName: senderName,
-              content: replyContent,
-              room,
-              isInvite: false,
-              spotName: null,
-              inviteTime: null,
-              date: new Date().toISOString()
-            };
-
-            const updatedMessages = await db.getMessages();
-            updatedMessages.push(botMessage);
-            await db.saveMessages(updatedMessages);
-
-            io.to(room).emit('message_received', botMessage);
-          }, 1500); // Wait 1.5s typing
-        }, 800); // Start typing after 0.8s
-      }
     } catch (error) {
       console.error('Socket error saving message:', error);
     }
@@ -577,6 +658,43 @@ io.on('connection', (socket) => {
     } catch (error) {
       console.error('Error fetching chat history:', error);
       callback([]);
+    }
+  });
+
+  // Edit a message
+  socket.on('edit_message', async ({ id, content, inviteTime, room }) => {
+    try {
+      const messages = await db.getMessages();
+      const idx = messages.findIndex(m => m.id === id);
+      if (idx !== -1) {
+        messages[idx].content = content;
+        if (inviteTime !== undefined) {
+          messages[idx].inviteTime = inviteTime;
+        }
+        messages[idx].isEdited = true;
+        messages[idx].editedAt = new Date().toISOString();
+        await db.saveMessages(messages);
+
+        io.to(room).emit('message_edited', messages[idx]);
+      }
+    } catch (error) {
+      console.error('Socket error editing message:', error);
+    }
+  });
+
+  // Delete a message
+  socket.on('delete_message', async ({ id, room }) => {
+    try {
+      let messages = await db.getMessages();
+      const msgToDelete = messages.find(m => m.id === id);
+      if (msgToDelete) {
+        messages = messages.filter(m => m.id !== id);
+        await db.saveMessages(messages);
+        
+        io.to(room).emit('message_deleted', { id });
+      }
+    } catch (error) {
+      console.error('Socket error deleting message:', error);
     }
   });
 

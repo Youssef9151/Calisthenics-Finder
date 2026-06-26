@@ -15,6 +15,7 @@ export default function App() {
   const [userLocation, setUserLocation] = useState(null);
   const [prefilledCoords, setPrefilledCoords] = useState(null);
   const [inviteDraft, setInviteDraft] = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
   
   // Auth Form States
   const [isLoginView, setIsLoginView] = useState(true);
@@ -62,13 +63,55 @@ export default function App() {
     fetchSpots();
   }, []);
 
+  // Fetch Pending requests count
+  const fetchPendingCount = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/friends/pending?username=${user.username}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPendingCount(data.length);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchPendingCount();
+    } else {
+      setPendingCount(0);
+    }
+  }, [user]);
+
   // Connect/Disconnect Socket.io based on User Session
   useEffect(() => {
     if (user) {
       const newSocket = io('http://localhost:5000');
       setSocket(newSocket);
 
+      const handleFriendRequestEvent = (event) => {
+        if (event.to === user.username || event.from === user.username) {
+          fetchPendingCount();
+        }
+      };
+
+      const handleSpotGoingUpdate = ({ spotId, going }) => {
+        setSpots(prevSpots => prevSpots.map(s => 
+          s.id === spotId ? { ...s, going } : s
+        ));
+        setSelectedSpot(prevSelected => 
+          prevSelected && prevSelected.id === spotId ? { ...prevSelected, going } : prevSelected
+        );
+      };
+
+      newSocket.on('friend_request_event', handleFriendRequestEvent);
+      newSocket.on('spot_going_update', handleSpotGoingUpdate);
+
       return () => {
+        newSocket.off('friend_request_event', handleFriendRequestEvent);
+        newSocket.off('spot_going_update', handleSpotGoingUpdate);
         newSocket.disconnect();
       };
     } else {
@@ -226,17 +269,9 @@ export default function App() {
             >
               <MessageSquare />
               <span>Friend Zone</span>
+              {pendingCount > 0 && <span className="request-badge">{pendingCount}</span>}
             </li>
-            <li 
-              className={`menu-item ${activeTab === 'register' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('register');
-                setPrefilledCoords(null); // clear prefill if entering directly
-              }}
-            >
-              <PlusCircle />
-              <span>Add Spot</span>
-            </li>
+
             <li 
               className={`menu-item ${activeTab === 'profile' ? 'active' : ''}`}
               onClick={() => setActiveTab('profile')}
@@ -250,8 +285,16 @@ export default function App() {
         {/* User profile footer */}
         <div className="sidebar-user">
           <div className="user-info">
-            <div className="user-avatar">
-              {user.username.charAt(0).toUpperCase()}
+            <div className="user-avatar" style={{ overflow: 'hidden', padding: 0 }}>
+              {user.photo ? (
+                <img 
+                  src={user.photo} 
+                  alt={user.username} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                />
+              ) : (
+                user.username.charAt(0).toUpperCase()
+              )}
             </div>
             <span className="username-display">{user.username}</span>
           </div>
@@ -266,6 +309,8 @@ export default function App() {
         <div className="view-container">
           {activeTab === 'map' && (
             <MapView
+              socket={socket}
+              user={user}
               spots={spots}
               selectedSpot={selectedSpot}
               setSelectedSpot={setSelectedSpot}
@@ -297,6 +342,7 @@ export default function App() {
           {activeTab === 'profile' && (
             <ProfileView
               user={user}
+              setUser={setUser}
               spots={spots}
             />
           )}

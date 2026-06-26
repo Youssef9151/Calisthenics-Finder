@@ -1,59 +1,6 @@
 [
   {
-    "id": "spot-1",
-    "name": "Central Park Calisthenics Gym",
-    "city": "New York",
-    "description": "A famous outdoor workout spot in the heart of Central Park. Has top-tier bars and a great fitness community.",
-    "lat": 40.785091,
-    "lng": -73.968285,
-    "equipment": [
-      "Pull-up Bars",
-      "Parallel Bars",
-      "Dip Bars",
-      "Monkey Bars",
-      "Swedish Wall"
-    ],
-    "image": "/assets/spots/central_park.jpg",
-    "rating": 4.8,
-    "reviewsCount": 3
-  },
-  {
-    "id": "spot-2",
-    "name": "Primrose Hill Workout Park",
-    "city": "London",
-    "description": "Great calisthenics setup with scenic views of London. Very active local community with weekend jams.",
-    "lat": 51.5406,
-    "lng": -0.161,
-    "equipment": [
-      "Pull-up Bars",
-      "Parallel Bars",
-      "Gymnastic Rings",
-      "Low Bars"
-    ],
-    "image": "/assets/spots/primrose_hill.jpg",
-    "rating": 4.6,
-    "reviewsCount": 2
-  },
-  {
-    "id": "spot-3",
-    "name": "Muscle Beach Outdoor Gym",
-    "city": "Los Angeles",
-    "description": "The legendary fitness hotspot at Santa Monica beach. Features full metal frame rigs, ropes, and rings.",
-    "lat": 34.0093,
-    "lng": -118.4969,
-    "equipment": [
-      "Pull-up Bars",
-      "Parallel Bars",
-      "Gymnastic Rings",
-      "Climbing Ropes",
-      "Dip Bars"
-    ],
-    "image": "/assets/spots/muscle_beach.jpg",
-    "rating": 4.9,
-    "reviewsCount": 4
-  },
-  {
-    "id": "spot-4",
+    "id": "spot-egypt-1",
     "name": "Zamalek Workout Park",
     "city": "Cairo",
     "description": "A beautiful riverside outdoor gym in Zamalek. Perfect for early morning workouts and sunset training.",
@@ -66,25 +13,50 @@
       "Ab benches"
     ],
     "image": "/assets/spots/zamalek.jpg",
-    "rating": 4.5,
-    "reviewsCount": 2
+    "rating": 0,
+    "reviewsCount": 0,
+    "going": [
+      {
+        "username": "Ahmed112233",
+        "time": "18:00",
+        "date": "2026-06-26"
+      }
+    ]
   },
   {
-    "id": "spot-5",
-    "name": "Bondi Beach Gym",
-    "city": "Sydney",
-    "description": "Iconic beachfront outdoor training area. Features multiple height bars right next to the ocean.",
-    "lat": -33.8915,
-    "lng": 151.2767,
+    "id": "spot-egypt-2",
+    "name": "Maadi Calisthenics Spot",
+    "city": "Cairo",
+    "description": "Vibrant training area in Maadi. Equipped with multiple-height bars and handles for calisthenics routines.",
+    "lat": 29.9602,
+    "lng": 31.2569,
     "equipment": [
       "Pull-up Bars",
       "Parallel Bars",
-      "Gymnastic Rings",
-      "Dip Bars",
-      "Monkey Bars"
+      "Swedish Wall",
+      "Low Bars"
     ],
-    "image": "/assets/spots/bondi_beach.jpg",
-    "rating": 4.7,
-    "reviewsCount": 3
+    "image": "/assets/spots/placeholder.jpg",
+    "rating": 0,
+    "reviewsCount": 0,
+    "going": []
+  },
+  {
+    "id": "spot-egypt-3",
+    "name": "Sporting Fitness Hub",
+    "city": "Alexandria",
+    "description": "Cool sea breeze training park in Alexandria Sporting. Perfect setup for bodyweight training.",
+    "lat": 31.2173,
+    "lng": 29.9328,
+    "equipment": [
+      "Pull-up Bars",
+      "Parallel Bars",
+      "Dip Bars",
+      "Gymnastic Rings"
+    ],
+    "image": "/assets/spots/placeholder.jpg",
+    "rating": 0,
+    "reviewsCount": 0,
+    "going": []
   }
 ]
