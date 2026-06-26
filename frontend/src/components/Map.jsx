@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Locate, MessageSquare, Star, Plus, MapPin, ChevronRight, Share2, Check } from 'lucide-react';
+import { Locate, MessageSquare, Star, Plus, MapPin, ChevronRight, Share2, Check, Camera } from 'lucide-react';
 
 export default function Map({
   socket,
@@ -43,6 +43,10 @@ export default function Map({
   const [routeData, setRouteData] = useState(null);
   const [fetchingRoute, setFetchingRoute] = useState(false);
   const routePolylineRef = useRef(null);
+
+  // Place Photos States
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [activeLightboxImage, setActiveLightboxImage] = useState(null);
 
   // Reset navigation when selectedSpot changes or is cleared
   useEffect(() => {
@@ -534,6 +538,71 @@ export default function Map({
     return `${hrs} hr${hrs !== 1 ? 's' : ''} ${remainingMins} min${remainingMins !== 1 ? 's' : ''}`;
   };
 
+  const handleAddSpotPhoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo size exceeds 5MB limit.');
+      return;
+    }
+
+    setUploadingPhoto(true);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        try {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+          const res = await fetch(`http://localhost:5000/api/spots/${selectedSpot.id}/photos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ photo: dataUrl })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            setSelectedSpot(prev => ({ ...prev, photos: data.photos }));
+          } else {
+            alert('Failed to upload photo to server.');
+          }
+        } catch (err) {
+          console.error('Failed to upload photo:', err);
+          alert('Error uploading photo.');
+        } finally {
+          setUploadingPhoto(false);
+        }
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="map-view-container">
       <div className="map-container-wrapper">
@@ -757,6 +826,75 @@ export default function Map({
                       </div>
                     ) : (
                       <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No equipment listed.</p>
+                    )}
+                  </div>
+
+                  {/* Community Photos Gallery */}
+                  <div style={{ marginTop: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <h3 className="details-section-title" style={{ margin: 0 }}>Community Photos</h3>
+                      <label style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '0.75rem',
+                        color: 'var(--accent-cyan)',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                        background: 'var(--bg-darker)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px',
+                        transition: 'var(--transition-fast)'
+                      }}>
+                        <Camera size={12} /> Add Photo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleAddSpotPhoto}
+                          style={{ display: 'none' }}
+                          disabled={uploadingPhoto}
+                        />
+                      </label>
+                    </div>
+
+                    {uploadingPhoto && (
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', background: 'var(--bg-darker)', padding: '8px', borderRadius: '6px', textAlign: 'center', marginBottom: '8px', border: '1px dashed var(--border-color)' }}>
+                        Processing & Uploading photo...
+                      </div>
+                    )}
+
+                    {selectedSpot.photos && selectedSpot.photos.length > 0 ? (
+                      <div style={{
+                        display: 'flex',
+                        gap: '8px',
+                        overflowX: 'auto',
+                        paddingBottom: '8px',
+                        scrollbarWidth: 'thin'
+                      }}>
+                        {selectedSpot.photos.map((ph, index) => (
+                          <img
+                            key={index}
+                            src={ph}
+                            alt={`${selectedSpot.name} user upload ${index + 1}`}
+                            onClick={() => setActiveLightboxImage(ph)}
+                            style={{
+                              width: '70px',
+                              height: '70px',
+                              borderRadius: '6px',
+                              objectFit: 'cover',
+                              cursor: 'pointer',
+                              border: '1px solid var(--border-color)',
+                              flexShrink: 0,
+                              transition: 'var(--transition-fast)'
+                            }}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0' }}>
+                        No community photos yet. Be the first to add one!
+                      </p>
                     )}
                   </div>
 
@@ -1085,6 +1223,63 @@ export default function Map({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {activeLightboxImage && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => setActiveLightboxImage(null)}
+          style={{ zIndex: 3000 }}
+        >
+          <div 
+            style={{
+              position: 'relative',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              background: 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setActiveLightboxImage(null)}
+              style={{
+                position: 'absolute',
+                top: '-40px',
+                right: '0',
+                background: 'rgba(0,0,0,0.6)',
+                border: '1px solid var(--border-color)',
+                color: 'white',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              ✕
+            </button>
+            <img 
+              src={activeLightboxImage} 
+              alt="Community Upload Fullscreen" 
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '80vh',
+                borderRadius: '8px',
+                objectFit: 'contain',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+                border: '1px solid var(--border-color)'
+              }}
+            />
           </div>
         </div>
       )}

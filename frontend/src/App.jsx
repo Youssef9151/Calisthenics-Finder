@@ -106,12 +106,23 @@ export default function App() {
         );
       };
 
+      const handleSpotPhotosUpdate = ({ spotId, photos }) => {
+        setSpots(prevSpots => prevSpots.map(s => 
+          s.id === spotId ? { ...s, photos } : s
+        ));
+        setSelectedSpot(prevSelected => 
+          prevSelected && prevSelected.id === spotId ? { ...prevSelected, photos } : prevSelected
+        );
+      };
+
       newSocket.on('friend_request_event', handleFriendRequestEvent);
       newSocket.on('spot_going_update', handleSpotGoingUpdate);
+      newSocket.on('spot_photos_update', handleSpotPhotosUpdate);
 
       return () => {
         newSocket.off('friend_request_event', handleFriendRequestEvent);
         newSocket.off('spot_going_update', handleSpotGoingUpdate);
+        newSocket.off('spot_photos_update', handleSpotPhotosUpdate);
         newSocket.disconnect();
       };
     } else {

@@ -502,6 +502,41 @@ app.post('/api/spots/:id/going', async (req, res) => {
   }
 });
 
+// Add photo to spot
+app.post('/api/spots/:id/photos', async (req, res) => {
+  const { id } = req.params;
+  const { photo } = req.body;
+
+  if (!photo) {
+    return res.status(400).json({ error: 'Photo data is required' });
+  }
+
+  try {
+    const spots = await db.getSpots();
+    const idx = spots.findIndex(s => s.id === id);
+
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Spot not found' });
+    }
+
+    if (!spots[idx].photos) {
+      spots[idx].photos = [];
+    }
+
+    spots[idx].photos.push(photo);
+
+    await db.saveSpots(spots);
+
+    // Emit live update over socket to all clients
+    io.emit('spot_photos_update', { spotId: id, photos: spots[idx].photos });
+
+    res.json({ success: true, photos: spots[idx].photos });
+  } catch (error) {
+    console.error('Add spot photo error:', error);
+    res.status(500).json({ error: 'Failed to add photo' });
+  }
+});
+
 // ==========================================
 // Spots Routes
 // ==========================================
