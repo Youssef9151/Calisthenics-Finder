@@ -52,6 +52,7 @@ app.post('/api/auth/register', async (req, res) => {
       photo: '',
       age: null,
       level: 'Beginner',
+      place: '',
       workoutStreak: 0,
       createdAt: new Date().toISOString()
     };
@@ -67,6 +68,7 @@ app.post('/api/auth/register', async (req, res) => {
         photo: '',
         age: null,
         level: 'Beginner',
+        place: '',
         workoutStreak: 0
       }
     });
@@ -104,6 +106,7 @@ app.post('/api/auth/login', async (req, res) => {
         photo: user.photo || '',
         age: user.age || null,
         level: user.level || 'Beginner',
+        place: user.place || '',
         workoutStreak: user.workoutStreak || 0
       }
     });
@@ -115,7 +118,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Update Profile
 app.post('/api/profile/update', async (req, res) => {
-  const { username, photo, age, level, workoutStreak } = req.body;
+  const { username, photo, age, level, place, workoutStreak } = req.body;
 
   if (!username) {
     return res.status(400).json({ error: 'Username is required' });
@@ -132,6 +135,7 @@ app.post('/api/profile/update', async (req, res) => {
     if (photo !== undefined) users[idx].photo = photo;
     if (age !== undefined) users[idx].age = age !== null && age !== '' ? parseInt(age) : null;
     if (level !== undefined) users[idx].level = level;
+    if (place !== undefined) users[idx].place = place;
     if (workoutStreak !== undefined) users[idx].workoutStreak = parseInt(workoutStreak) || 0;
 
     await db.saveUsers(users);
@@ -144,6 +148,7 @@ app.post('/api/profile/update', async (req, res) => {
         photo: users[idx].photo || '',
         age: users[idx].age || null,
         level: users[idx].level || 'Beginner',
+        place: users[idx].place || '',
         workoutStreak: users[idx].workoutStreak || 0
       }
     });
@@ -376,10 +381,10 @@ app.get('/api/friends/list', async (req, res) => {
 
 // Create a new group
 app.post('/api/groups', async (req, res) => {
-  const { name, members } = req.body;
+  const { name, members, creator, description, photo } = req.body;
 
-  if (!name || !Array.isArray(members) || members.length === 0) {
-    return res.status(400).json({ error: 'Group name and members list are required' });
+  if (!name || !Array.isArray(members) || members.length === 0 || !creator) {
+    return res.status(400).json({ error: 'Group name, members list, and creator are required' });
   }
 
   try {
@@ -387,7 +392,10 @@ app.post('/api/groups', async (req, res) => {
     const newGroup = {
       id: 'group-' + Date.now(),
       name,
-      members, // Array of usernames
+      description: description || '',
+      photo: photo || '',
+      members: [creator], // Creator is active immediately
+      pendingMembers: members.filter(m => m.toLowerCase() !== creator.toLowerCase()),
       createdAt: new Date().toISOString()
     };
 
@@ -407,6 +415,76 @@ app.post('/api/groups', async (req, res) => {
   }
 });
 
+// Accept group invitation
+app.post('/api/groups/:id/accept', async (req, res) => {
+  const { id } = req.params;
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'Username is required' });
+
+  try {
+    const groups = await db.getGroups();
+    const idx = groups.findIndex(g => g.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Group not found' });
+
+    groups[idx].pendingMembers = groups[idx].pendingMembers || [];
+    groups[idx].members = groups[idx].members || [];
+
+    const isPending = groups[idx].pendingMembers.some(m => m.toLowerCase() === username.toLowerCase());
+    if (!isPending) return res.status(400).json({ error: 'User is not invited or already a member' });
+
+    // Move user
+    groups[idx].pendingMembers = groups[idx].pendingMembers.filter(m => m.toLowerCase() !== username.toLowerCase());
+    if (!groups[idx].members.some(m => m.toLowerCase() === username.toLowerCase())) {
+      groups[idx].members.push(username);
+    }
+
+    await db.saveGroups(groups);
+
+    // Notify other members
+    io.emit('group_event', {
+      type: 'group_joined',
+      groupId: id,
+      username,
+      group: groups[idx]
+    });
+
+    res.json({ success: true, group: groups[idx] });
+  } catch (error) {
+    console.error('Accept group invite error:', error);
+    res.status(500).json({ error: 'Failed to accept invitation' });
+  }
+});
+
+// Decline group invitation
+app.post('/api/groups/:id/decline', async (req, res) => {
+  const { id } = req.params;
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'Username is required' });
+
+  try {
+    const groups = await db.getGroups();
+    const idx = groups.findIndex(g => g.id === id);
+    if (idx === -1) return res.status(404).json({ error: 'Group not found' });
+
+    groups[idx].pendingMembers = groups[idx].pendingMembers || [];
+    groups[idx].pendingMembers = groups[idx].pendingMembers.filter(m => m.toLowerCase() !== username.toLowerCase());
+
+    await db.saveGroups(groups);
+
+    io.emit('group_event', {
+      type: 'group_declined',
+      groupId: id,
+      username,
+      group: groups[idx]
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Decline group invite error:', error);
+    res.status(500).json({ error: 'Failed to decline invitation' });
+  }
+});
+
 // Get user's groups
 app.get('/api/groups', async (req, res) => {
   const { username } = req.query;
@@ -417,9 +495,18 @@ app.get('/api/groups', async (req, res) => {
 
   try {
     const groups = await db.getGroups();
-    const userGroups = groups.filter(g => 
-      g.members.some(m => m.toLowerCase() === username.toLowerCase())
-    );
+    const userGroups = groups
+      .filter(g => 
+        (g.members && g.members.some(m => m.toLowerCase() === username.toLowerCase())) ||
+        (g.pendingMembers && g.pendingMembers.some(m => m.toLowerCase() === username.toLowerCase()))
+      )
+      .map(g => {
+        const isPending = g.pendingMembers && g.pendingMembers.some(m => m.toLowerCase() === username.toLowerCase());
+        return {
+          ...g,
+          isPending
+        };
+      });
     res.json(userGroups);
   } catch (error) {
     console.error('Failed to fetch groups:', error);
@@ -447,6 +534,7 @@ app.get('/api/users/profile', async (req, res) => {
       photo: user.photo || '',
       age: user.age || null,
       level: user.level || 'Beginner',
+      place: user.place || '',
       workoutStreak: user.workoutStreak || 0,
       createdAt: user.createdAt
     });
@@ -652,9 +740,17 @@ io.on('connection', (socket) => {
     console.log(`User ${userId} joined room: ${room}`);
   });
 
+  // Register user for background notification delivery
+  socket.on('register_user', (username) => {
+    if (username) {
+      socket.join(`user-${username}`);
+      console.log(`Socket ${socket.id} registered to user notification channel: user-${username}`);
+    }
+  });
+
   // When a user sends a message
   socket.on('send_message', async (messageData) => {
-    const { senderId, senderName, receiverName, content, room, isInvite, spotName, inviteTime } = messageData;
+    const { senderId, senderName, receiverName, content, room, isInvite, spotName, inviteTime, photo, voice } = messageData;
     
     try {
       const messages = await db.getMessages();
@@ -671,6 +767,8 @@ io.on('connection', (socket) => {
         isInvite: !!isInvite,
         spotName: spotName || null,
         inviteTime: inviteTime || null,
+        photo: photo || null,
+        voice: voice || null,
         date: new Date().toISOString()
       };
 
@@ -679,6 +777,21 @@ io.on('connection', (socket) => {
 
       // Emit to room (real-time chat for multiple active users)
       io.to(room).emit('message_received', newMessage);
+
+      // Send to recipient(s) user notification rooms for background alerts
+      if (isGroup) {
+        const groups = await db.getGroups();
+        const group = groups.find(g => g.id === room);
+        if (group && Array.isArray(group.members)) {
+          group.members.forEach(member => {
+            if (member.toLowerCase() !== senderName.toLowerCase()) {
+              io.to(`user-${member}`).emit('message_notification', newMessage);
+            }
+          });
+        }
+      } else if (receiverName) {
+        io.to(`user-${receiverName}`).emit('message_notification', newMessage);
+      }
     } catch (error) {
       console.error('Socket error saving message:', error);
     }

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Locate, MessageSquare, Star, Plus, MapPin, ChevronRight, Share2, Check, Camera } from 'lucide-react';
+import { Locate, MessageSquare, Star, Plus, MapPin, ChevronRight, Share2, Check, Camera, Sun, Moon, Globe } from 'lucide-react';
 
 export default function Map({
   socket,
@@ -47,6 +47,10 @@ export default function Map({
   // Place Photos States
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [activeLightboxImage, setActiveLightboxImage] = useState(null);
+
+  // Map Theme States
+  const [mapTheme, setMapTheme] = useState('dark');
+  const tileLayerRef = useRef(null);
 
   // Reset navigation when selectedSpot changes or is cleared
   useEffect(() => {
@@ -145,7 +149,7 @@ export default function Map({
       }).setView(initialCenter, initialZoom);
 
       // Add Esri World Street Map (English labels, styled with CSS dark filter)
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      tileLayerRef.current = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ',
         maxZoom: 19,
         className: 'dark-map-tiles'
@@ -214,6 +218,43 @@ export default function Map({
       }
     };
   }, []);
+
+  // Update Tile Layer when Map Theme changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (tileLayerRef.current) {
+      mapRef.current.removeLayer(tileLayerRef.current);
+    }
+
+    let tileUrl = '';
+    let tileOptions = {};
+
+    if (mapTheme === 'dark') {
+      tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+      tileOptions = {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ',
+        maxZoom: 19,
+        className: 'dark-map-tiles'
+      };
+    } else if (mapTheme === 'light') {
+      tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+      tileOptions = {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ',
+        maxZoom: 19,
+        className: ''
+      };
+    } else if (mapTheme === 'satellite') {
+      tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      tileOptions = {
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+        maxZoom: 19,
+        className: ''
+      };
+    }
+
+    tileLayerRef.current = L.tileLayer(tileUrl, tileOptions).addTo(mapRef.current);
+  }, [mapTheme]);
 
   // Update User Location Marker
   useEffect(() => {
@@ -671,6 +712,73 @@ export default function Map({
               )}
             </div>
           )}
+        </div>
+
+        {/* Map Theme Switcher */}
+        <div style={{ position: 'absolute', zIndex: 1000, top: '20px', right: '20px', background: 'var(--glass-bg)', backdropFilter: 'var(--glass-blur)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)', borderRadius: '12px', padding: '4px', display: 'flex', gap: '4px' }}>
+          <button
+            type="button"
+            onClick={() => setMapTheme('dark')}
+            style={{
+              background: mapTheme === 'dark' ? 'var(--accent-cyan)' : 'none',
+              border: 'none',
+              color: mapTheme === 'dark' ? 'var(--bg-darker)' : 'var(--text-secondary)',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s'
+            }}
+            title="Dark Mode Map"
+          >
+            <Moon size={14} /> Dark
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapTheme('light')}
+            style={{
+              background: mapTheme === 'light' ? 'var(--accent-cyan)' : 'none',
+              border: 'none',
+              color: mapTheme === 'light' ? 'var(--bg-darker)' : 'var(--text-secondary)',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s'
+            }}
+            title="Light Mode Map"
+          >
+            <Sun size={14} /> Light
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapTheme('satellite')}
+            style={{
+              background: mapTheme === 'satellite' ? 'var(--accent-cyan)' : 'none',
+              border: 'none',
+              color: mapTheme === 'satellite' ? 'var(--bg-darker)' : 'var(--text-secondary)',
+              borderRadius: '8px',
+              padding: '6px 12px',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s'
+            }}
+            title="Satellite View Map"
+          >
+            <Globe size={14} /> Satellite
+          </button>
         </div>
 
         <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }}></div>

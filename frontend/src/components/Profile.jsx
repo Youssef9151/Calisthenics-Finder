@@ -13,6 +13,7 @@ export default function Profile({ user, setUser, spots }) {
   const [photoUrl, setPhotoUrl] = useState(user.photo || '');
   const [age, setAge] = useState(user.age !== null ? user.age : '');
   const [level, setLevel] = useState(user.level || 'Beginner');
+  const [place, setPlace] = useState(user.place || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -22,6 +23,7 @@ export default function Profile({ user, setUser, spots }) {
     setPhotoUrl(user.photo || '');
     setAge(user.age !== null ? user.age : '');
     setLevel(user.level || 'Beginner');
+    setPlace(user.place || '');
   }, [user]);
 
   const handlePhotoChange = (e) => {
@@ -132,7 +134,8 @@ export default function Profile({ user, setUser, spots }) {
           username: user.username,
           photo: photoUrl,
           age: ageVal,
-          level
+          level,
+          place
         })
       });
 
@@ -176,9 +179,12 @@ export default function Profile({ user, setUser, spots }) {
           )}
           <div>
             <h1 style={{ fontFamily: 'var(--font-title)', fontSize: '1.8rem', fontWeight: '800', marginBottom: '6px' }}>{user.username}</h1>
-            <p style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.95rem' }}>
+            <p style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.95rem', marginBottom: '4px' }}>
               <Award size={16} color="var(--accent-cyan)" /> {user.level || 'Beginner'} Athlete
               {user.age && <span style={{ color: 'var(--text-muted)' }}>• {user.age} Years Old</span>}
+            </p>
+            <p style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }}>
+              <MapPin size={14} color="var(--accent-green)" /> {user.place || 'Unknown Location'}
             </p>
           </div>
         </div>
@@ -278,6 +284,18 @@ export default function Profile({ user, setUser, spots }) {
                     <option value="Advanced">Advanced</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label htmlFor="place" style={{ fontSize: '0.9rem', fontWeight: '600' }}>Place / City</label>
+                <input 
+                  type="text" 
+                  id="place"
+                  placeholder="e.g. Heliopolis, Cairo"
+                  className="input-field"
+                  value={place}
+                  onChange={(e) => setPlace(e.target.value)}
+                />
               </div>
 
               {error && <div className="error-msg">{error}</div>}

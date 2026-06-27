@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { Map, MessageSquare, PlusCircle, User, LogOut, Lock, UserCheck } from 'lucide-react';
 import MapView from './components/Map';
@@ -25,6 +25,56 @@ export default function App() {
 
   // Socket State
   const [socket, setSocket] = useState(null);
+
+  // Unread Message / Active Chat States
+  const [activeChat, setActiveChat] = useState(null);
+  const [unreadCounts, setUnreadCounts] = useState({});
+
+  const activeTabRef = useRef(activeTab);
+  const activeChatRef = useRef(activeChat);
+
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
+  useEffect(() => {
+    activeChatRef.current = activeChat;
+    if (activeChat && user) {
+      let room = '';
+      if (activeChat.type === 'group') {
+        room = activeChat.data.id;
+      } else {
+        const sorted = [user.username, activeChat.data.name].sort();
+        room = `private-${sorted[0]}-${sorted[1]}`;
+      }
+      setUnreadCounts(prev => {
+        if (prev[room]) {
+          const updated = { ...prev };
+          delete updated[room];
+          return updated;
+        }
+        return prev;
+      });
+    }
+  }, [activeChat, user]);
+
+  useEffect(() => {
+    if (activeTab === 'chat' && activeChat && user) {
+      let room = '';
+      if (activeChat.type === 'group') {
+        room = activeChat.data.id;
+      } else {
+        const sorted = [user.username, activeChat.data.name].sort();
+        room = `private-${sorted[0]}-${sorted[1]}`;
+      }
+      setUnreadCounts(prev => {
+        if (prev[room]) {
+          const updated = { ...prev };
+          delete updated[room];
+          return updated;
+        }
+        return prev;
+      });
+    }
+  }, [activeTab, activeChat, user]);
 
   // Load user session on mount
   useEffect(() => {
@@ -91,6 +141,8 @@ export default function App() {
       const newSocket = io('http://localhost:5000');
       setSocket(newSocket);
 
+      newSocket.emit('register_user', user.username);
+
       const handleFriendRequestEvent = (event) => {
         if (event.to === user.username || event.from === user.username) {
           fetchPendingCount();
@@ -115,14 +167,36 @@ export default function App() {
         );
       };
 
+      const handleMessageNotification = (msg) => {
+        const currentTab = activeTabRef.current;
+        const currentChat = activeChatRef.current;
+        let currentRoom = null;
+        if (currentChat) {
+          if (currentChat.type === 'group') {
+            currentRoom = currentChat.data.id;
+          } else {
+            const sorted = [user.username, currentChat.data.name].sort();
+            currentRoom = `private-${sorted[0]}-${sorted[1]}`;
+          }
+        }
+        if (currentTab !== 'chat' || currentRoom !== msg.room) {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [msg.room]: (prev[msg.room] || 0) + 1
+          }));
+        }
+      };
+
       newSocket.on('friend_request_event', handleFriendRequestEvent);
       newSocket.on('spot_going_update', handleSpotGoingUpdate);
       newSocket.on('spot_photos_update', handleSpotPhotosUpdate);
+      newSocket.on('message_notification', handleMessageNotification);
 
       return () => {
         newSocket.off('friend_request_event', handleFriendRequestEvent);
         newSocket.off('spot_going_update', handleSpotGoingUpdate);
         newSocket.off('spot_photos_update', handleSpotPhotosUpdate);
+        newSocket.off('message_notification', handleMessageNotification);
         newSocket.disconnect();
       };
     } else {
@@ -255,6 +329,8 @@ export default function App() {
     );
   }
 
+  const totalUnreadMessages = Object.values(unreadCounts).reduce((sum, val) => sum + val, 0);
+
   // If user is logged in, render Main Application Layout
   return (
     <div className="app-container">
@@ -280,7 +356,18 @@ export default function App() {
             >
               <MessageSquare />
               <span>Friend Zone</span>
-              {pendingCount > 0 && <span className="request-badge">{pendingCount}</span>}
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                {totalUnreadMessages > 0 && (
+                  <span className="request-badge" style={{ margin: 0 }}>
+                    {totalUnreadMessages}
+                  </span>
+                )}
+                {pendingCount > 0 && (
+                  <span className="request-badge" style={{ margin: 0, background: '#fbbf24', boxShadow: '0 0 8px rgba(251, 191, 36, 0.4)' }}>
+                    {pendingCount}
+                  </span>
+                )}
+              </div>
             </li>
 
             <li 
@@ -295,7 +382,7 @@ export default function App() {
 
         {/* User profile footer */}
         <div className="sidebar-user">
-          <div className="user-info">
+          <div className="user-info" onClick={() => setActiveTab('profile')} style={{ cursor: 'pointer' }} title="View Profile">
             <div className="user-avatar" style={{ overflow: 'hidden', padding: 0 }}>
               {user.photo ? (
                 <img 
@@ -340,6 +427,10 @@ export default function App() {
               setInviteDraft={setInviteDraft}
               setSelectedSpot={setSelectedSpot}
               setActiveTab={setActiveTab}
+              activeChat={activeChat}
+              setActiveChat={setActiveChat}
+              unreadCounts={unreadCounts}
+              setUnreadCounts={setUnreadCounts}
             />
           )}
 

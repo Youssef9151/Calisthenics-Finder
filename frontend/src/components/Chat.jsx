@@ -1,17 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, MapPin, Calendar, Clock, Smile, MessageSquare, CalendarCheck, Search, Check, UserPlus, UserX, Users, PlusCircle } from 'lucide-react';
+import { Send, MapPin, Calendar, Clock, Smile, MessageSquare, CalendarCheck, Search, Check, UserPlus, UserX, Users, PlusCircle, Camera, Mic, Square, Volume2 } from 'lucide-react';
 import { CustomTimePicker } from './Map';
 
 const WORKOUT_EMOJIS = ['💪', '🤸', '🏋️', '🏃', '🔥', '👍', '🙌', '👏', '🎯', '🥇', '🥗', '🥤', '😎', '💥', '👊', '📈'];
 
-export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSelectedSpot, setActiveTab }) {
+export default function Chat({ 
+  socket, 
+  user, 
+  inviteDraft, 
+  setInviteDraft, 
+  setSelectedSpot, 
+  setActiveTab,
+  activeChat,
+  setActiveChat,
+  unreadCounts,
+  setUnreadCounts
+}) {
   const [friends, setFriends] = useState([]);
   const [groups, setGroups] = useState([]);
-  
-  // activeChat is either:
-  // { type: 'private', data: friendObject }
-  // { type: 'group', data: groupObject }
-  const [activeChat, setActiveChat] = useState(null);
   
   const [pendingRequests, setPendingRequests] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -22,6 +28,15 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [selectedGroupMembers, setSelectedGroupMembers] = useState([]); // friend names
+  const [groupDesc, setGroupDesc] = useState('');
+  const [groupPhoto, setGroupPhoto] = useState('');
+
+  // Voice Recording States & Refs
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
 
   // Friends Search States
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,6 +85,43 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
       }
     } catch (err) {
       console.error('Failed to fetch groups:', err);
+    }
+  };
+
+  const handleAcceptGroupInvite = async (groupId) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/groups/${groupId}/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.username })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        fetchGroups();
+        setActiveChat({ type: 'group', data: data.group });
+      }
+    } catch (err) {
+      console.error('Failed to accept group invite:', err);
+    }
+  };
+
+  const handleDeclineGroupInvite = async (groupId) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/groups/${groupId}/decline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.username })
+      });
+
+      if (res.ok) {
+        fetchGroups();
+        if (activeChat?.type === 'group' && activeChat.data.id === groupId) {
+          setActiveChat(null);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to decline group invite:', err);
     }
   };
 
@@ -200,23 +252,72 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
     );
   };
 
+  const handleGroupPhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Photo size exceeds 2MB limit.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 300;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        setGroupPhoto(dataUrl);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleCreateGroup = async (e) => {
     e.preventDefault();
     if (!groupName.trim() || selectedGroupMembers.length === 0) return;
 
-    // Group members must include the current user
     const membersList = [user.username, ...selectedGroupMembers];
 
     try {
       const res = await fetch('http://localhost:5000/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: groupName, members: membersList })
+        body: JSON.stringify({
+          name: groupName,
+          members: membersList,
+          creator: user.username,
+          description: groupDesc,
+          photo: groupPhoto
+        })
       });
 
       if (res.ok) {
         const newGroup = await res.json();
         setGroupName('');
+        setGroupDesc('');
+        setGroupPhoto('');
         setSelectedGroupMembers([]);
         setShowGroupModal(false);
         fetchGroups();
@@ -363,6 +464,134 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
     setShowEmojiPicker(false);
   };
 
+  // Handle sending a compressed photo
+  const handleSendPhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (!file || !socket || !currentRoom) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo size exceeds 5MB limit.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+        socket.emit('send_message', {
+          senderId: user.id,
+          senderName: user.username,
+          receiverName: activeChat.type === 'private' ? activeChat.data.name : null,
+          content: '📷 Photo Attachment',
+          room: currentRoom,
+          photo: dataUrl
+        });
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle voice message recording toggle
+  const handleToggleVoiceRecording = async () => {
+    if (isRecording) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunksRef.current = [];
+        const options = { mimeType: 'audio/webm' };
+        
+        let mediaRecorder;
+        try {
+          mediaRecorder = new MediaRecorder(stream, options);
+        } catch (e) {
+          mediaRecorder = new MediaRecorder(stream);
+        }
+
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+          stream.getTracks().forEach(track => track.stop());
+
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Audio = reader.result;
+
+            socket.emit('send_message', {
+              senderId: user.id,
+              senderName: user.username,
+              receiverName: activeChat.type === 'private' ? activeChat.data.name : null,
+              content: '🎤 Voice Message',
+              room: currentRoom,
+              voice: base64Audio
+            });
+          };
+          reader.readAsDataURL(audioBlob);
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
+        setRecordingTime(0);
+
+        recordingTimerRef.current = setInterval(() => {
+          setRecordingTime(prev => prev + 1);
+        }, 1000);
+      } catch (err) {
+        console.error('Failed to start recording voice:', err);
+        alert('Could not access microphone. Please check permissions.');
+      }
+    }
+  };
+
+  const formatRecordingTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, []);
+
   // Handle Emoji Selection
   const handleEmojiSelect = (emoji) => {
     setInputText(prev => prev + emoji);
@@ -474,29 +703,95 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
         {/* Dynamic Sidebar Lists */}
         <div style={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
-          {/* Groups list */}
-          {groups.length > 0 && (
+          {/* Group Invitations list */}
+          {groups.filter(g => g.isPending).length > 0 && (
+            <div>
+              <div style={{ padding: '12px 20px 6px 20px' }}>
+                <h4 style={{ fontSize: '0.75rem', color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Users size={14} /> Crew Invitations ({groups.filter(g => g.isPending).length})
+                </h4>
+              </div>
+              <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {groups.filter(g => g.isPending).map(group => (
+                  <div
+                    key={group.id}
+                    style={{ padding: '12px', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {group.photo ? (
+                        <img 
+                          src={group.photo} 
+                          alt={group.name} 
+                          style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--border-color)' }}
+                        />
+                      ) : (
+                        <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)', fontWeight: '700', fontSize: '0.85rem' }}>
+                          {group.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.name}</div>
+                        {group.description && (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.description}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        onClick={() => handleAcceptGroupInvite(group.id)}
+                        style={{ flex: 1, background: 'var(--accent-green)', border: 'none', borderRadius: '4px', color: 'var(--bg-darker)', padding: '4px 8px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
+                      >
+                        Join
+                      </button>
+                      <button
+                        onClick={() => handleDeclineGroupInvite(group.id)}
+                        style={{ flex: 1, background: 'none', border: '1px solid var(--accent-red)', borderRadius: '4px', color: 'var(--accent-red)', padding: '4px 8px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Active Groups list */}
+          {groups.filter(g => !g.isPending).length > 0 && (
             <div>
               <div style={{ padding: '12px 20px 6px 20px' }}>
                 <h4 style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Users size={14} /> Group Crews ({groups.length})
+                  <Users size={14} /> Group Crews ({groups.filter(g => !g.isPending).length})
                 </h4>
               </div>
               <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {groups.map(group => (
+                {groups.filter(g => !g.isPending).map(group => (
                   <div
                     key={group.id}
                     className={`friend-card ${activeChat?.type === 'group' && activeChat.data.id === group.id ? 'active' : ''}`}
                     onClick={() => setActiveChat({ type: 'group', data: group })}
                     style={{ padding: '8px 12px' }}
                   >
-                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'var(--accent-cyan-glow)', border: '1px solid var(--accent-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)', fontWeight: '700', fontSize: '0.85rem' }}>
-                      G
-                    </div>
+                    {group.photo ? (
+                      <img 
+                        src={group.photo} 
+                        alt={group.name} 
+                        style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--border-color)' }}
+                      />
+                    ) : (
+                      <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'var(--accent-cyan-glow)', border: '1px solid var(--accent-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)', fontWeight: '700', fontSize: '0.85rem' }}>
+                        {group.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div className="friend-info">
                       <div className="friend-name" style={{ fontSize: '0.9rem' }}>{group.name}</div>
                       <div className="friend-status-text" style={{ fontSize: '0.75rem' }}>{group.members.length} Members</div>
                     </div>
+                    {unreadCounts && unreadCounts[group.id] > 0 && (
+                      <span className="request-badge" style={{ margin: '0 0 0 auto', background: 'var(--accent-red)' }}>
+                        {unreadCounts[group.id]}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -540,6 +835,15 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
                       <div className="friend-name">{friend.name}</div>
                       <div className="friend-status-text">{friend.statusText}</div>
                     </div>
+                    {(() => {
+                      const sorted = [user.username, friend.name].sort();
+                      const room = `private-${sorted[0]}-${sorted[1]}`;
+                      return unreadCounts && unreadCounts[room] > 0 ? (
+                        <span className="request-badge" style={{ margin: '0 0 0 auto', background: 'var(--accent-red)' }}>
+                          {unreadCounts[room]}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                 ))
               ) : (
@@ -560,7 +864,13 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '120px', overflowY: 'auto' }}>
               {pendingRequests.map(reqName => (
                 <div key={reqName} style={{ display: 'flex', alignItems: 'center', justifycontent: 'space-between', padding: '8px', background: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.8rem' }}>
-                  <span style={{ fontWeight: '600' }}>@{reqName}</span>
+                  <span 
+                    onClick={() => setViewedProfileUser(reqName)} 
+                    style={{ fontWeight: '600', cursor: 'pointer', color: 'var(--accent-cyan)', textDecoration: 'underline' }}
+                    title="View Profile"
+                  >
+                    @{reqName}
+                  </span>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button
                       onClick={() => handleAcceptRequest(reqName)}
@@ -612,12 +922,23 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
                 </div>
               ) : (
                 <>
-                  <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: 'var(--accent-cyan-glow)', border: '1px solid var(--accent-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)', fontWeight: '700' }}>
-                    G
-                  </div>
+                  {activeChat.data.photo ? (
+                    <img 
+                      src={activeChat.data.photo} 
+                      alt={activeChat.data.name} 
+                      style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--accent-cyan)' }}
+                    />
+                  ) : (
+                    <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: 'var(--accent-cyan-glow)', border: '1px solid var(--accent-cyan)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)', fontWeight: '700' }}>
+                      {activeChat.data.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <h3 style={{ fontFamily: 'var(--font-title)', fontSize: '1.05rem', fontWeight: '700', marginBottom: '2px' }}>{activeChat.data.name}</h3>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{activeChat.data.members.join(', ')}</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {activeChat.data.description ? `${activeChat.data.description} • ` : ''}
+                      {activeChat.data.members.join(', ')}
+                    </span>
                   </div>
                 </>
               )}
@@ -706,6 +1027,36 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
                                 </button>
                               </div>
                             </div>
+                          ) : msg.photo ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <img 
+                                src={msg.photo} 
+                                alt="Attachment" 
+                                style={{ maxWidth: '280px', maxHeight: '200px', borderRadius: '8px', objectFit: 'cover', display: 'block', border: '1px solid var(--border-color)', cursor: 'pointer' }}
+                                onClick={() => {
+                                  const w = window.open();
+                                  if (w) {
+                                    w.document.write(`<img src="${msg.photo}" style="max-width:100%; max-height:100vh; display:block; margin:auto; background:#111;"/>`);
+                                    w.document.title = "View Image Attachment";
+                                  }
+                                }}
+                                title="View original image"
+                              />
+                            </div>
+                          ) : msg.voice ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', minWidth: '220px' }}>
+                              <Volume2 size={16} color="var(--accent-cyan)" />
+                              <audio 
+                                src={msg.voice} 
+                                controls 
+                                style={{ 
+                                  height: '28px', 
+                                  width: '180px',
+                                  outline: 'none',
+                                  background: 'none'
+                                }} 
+                              />
+                            </div>
                           ) : (
                             msg.content
                           )}
@@ -774,22 +1125,63 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
                 type="button"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                 style={{ background: 'none', border: 'none', color: showEmojiPicker ? 'var(--accent-cyan)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'var(--transition-fast)' }}
+                disabled={isRecording}
               >
                 <Smile size={20} />
               </button>
+
+              <input
+                type="file"
+                accept="image/*"
+                id="chat-photo-file-input"
+                style={{ display: 'none' }}
+                onChange={handleSendPhotoChange}
+              />
+              <button
+                type="button"
+                onClick={() => document.getElementById('chat-photo-file-input').click()}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'var(--transition-fast)' }}
+                title="Send Photo"
+                disabled={isRecording}
+              >
+                <Camera size={20} />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleVoiceRecording}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  color: isRecording ? 'var(--accent-red)' : 'var(--text-secondary)', 
+                  cursor: 'pointer', 
+                  transition: 'var(--transition-fast)'
+                }}
+                title={isRecording ? "Stop & Send Recording" : "Record Voice Message"}
+              >
+                {isRecording ? <Square size={20} style={{ color: 'var(--accent-red)' }} /> : <Mic size={20} />}
+              </button>
               
-              <div className="chat-input-wrapper">
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  className="chat-input"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  ref={chatInputRef}
-                  onClick={() => setShowEmojiPicker(false)}
-                />
-              </div>
-              <button type="submit" className="btn-send">
+              {isRecording ? (
+                <div style={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-darker)', borderRadius: '24px', padding: '10px 20px', border: '1px solid var(--accent-red)' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-red)', boxShadow: '0 0 8px var(--accent-red-glow)', animation: 'pulseRed 1s infinite' }}></div>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--accent-red)', fontWeight: '600' }}>Recording Voice: {formatRecordingTime(recordingTime)}</span>
+                </div>
+              ) : (
+                <div className="chat-input-wrapper">
+                  <input
+                    type="text"
+                    placeholder="Type a message..."
+                    className="chat-input"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    ref={chatInputRef}
+                    onClick={() => setShowEmojiPicker(false)}
+                  />
+                </div>
+              )}
+              
+              <button type="submit" className="btn-send" disabled={isRecording}>
                 <Send size={18} />
               </button>
             </form>
@@ -824,6 +1216,61 @@ export default function Chat({ socket, user, inviteDraft, setInviteDraft, setSel
                   onChange={(e) => setGroupName(e.target.value)}
                   required
                 />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="group-desc-input">Description</label>
+                <textarea 
+                  id="group-desc-input"
+                  placeholder="e.g. Heliopolis outdoor athletes community"
+                  className="input-field"
+                  value={groupDesc}
+                  onChange={(e) => setGroupDesc(e.target.value)}
+                  rows={2}
+                  style={{ resize: 'none' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label>Crew Photo</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'var(--bg-darker)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                  {groupPhoto ? (
+                    <div style={{ position: 'relative' }}>
+                      <img 
+                        src={groupPhoto} 
+                        alt="Group Preview" 
+                        style={{ width: '50px', height: '50px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--accent-cyan)' }} 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => setGroupPhoto('')} 
+                        style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--accent-red)', color: 'white', border: 'none', borderRadius: '50%', width: '16px', height: '16px', fontSize: '0.65rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ width: '50px', height: '50px', borderRadius: '8px', background: 'var(--bg-secondary)', border: '1px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: 'var(--text-muted)', fontWeight: '700' }}>
+                      G
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label 
+                      htmlFor="group-photo-upload" 
+                      className="btn btn-secondary" 
+                      style={{ cursor: 'pointer', display: 'inline-flex', width: 'auto', padding: '6px 12px', fontSize: '0.8rem', margin: 0 }}
+                    >
+                      Choose Image
+                    </label>
+                    <input 
+                      type="file" 
+                      id="group-photo-upload" 
+                      accept="image/*" 
+                      style={{ display: 'none' }} 
+                      onChange={handleGroupPhotoChange} 
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="form-group">
