@@ -262,7 +262,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="logo-icon">C</div>
-          <span className="logo-text">BARS FINDER</span>
+          <span className="logo-text">CALISTHENICS FINDER</span>
         </div>
 
         <nav style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>

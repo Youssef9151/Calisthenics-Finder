@@ -606,7 +606,7 @@ export default function Map({
   return (
     <div className="map-view-container">
       <div className="map-container-wrapper">
-        <div className="map-search-overlay" style={{ position: 'absolute', zIndex: 1000, top: '20px', left: '20px', width: '320px' }}>
+        <div className="map-search-overlay">
           <form onSubmit={handleSearchSubmit} className="map-search-card" style={{ marginBottom: 0 }}>
             <input
               type="text"
