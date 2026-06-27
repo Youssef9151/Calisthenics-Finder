@@ -715,7 +715,7 @@ export default function Map({
         </div>
 
         {/* Map Theme Switcher */}
-        <div style={{ position: 'absolute', zIndex: 1000, top: '20px', right: '20px', background: 'var(--glass-bg)', backdropFilter: 'var(--glass-blur)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)', borderRadius: '12px', padding: '4px', display: 'flex', gap: '4px' }}>
+        <div style={{ position: 'absolute', zIndex: 1000, bottom: '40px', left: '20px', background: 'var(--glass-bg)', backdropFilter: 'var(--glass-blur)', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)', borderRadius: '12px', padding: '4px', display: 'flex', gap: '4px' }}>
           <button
             type="button"
             onClick={() => setMapTheme('dark')}
