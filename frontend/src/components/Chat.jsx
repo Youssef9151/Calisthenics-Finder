@@ -337,7 +337,7 @@ export default function Chat({
 
   // Generate unique room name for private chats
   const getRoomName = (user1, user2) => {
-    return [user1, user2].sort().join('_');
+    return `private_${[user1.toLowerCase(), user2.toLowerCase()].sort().join('_')}`;
   };
 
   // Determine active chat room string
@@ -836,8 +836,7 @@ export default function Chat({
                       <div className="friend-status-text">{friend.statusText}</div>
                     </div>
                     {(() => {
-                      const sorted = [user.username, friend.name].sort();
-                      const room = `private-${sorted[0]}-${sorted[1]}`;
+                      const room = getRoomName(user.username, friend.name);
                       return unreadCounts && unreadCounts[room] > 0 ? (
                         <span className="request-badge" style={{ margin: '0 0 0 auto', background: 'var(--accent-red)' }}>
                           {unreadCounts[room]}

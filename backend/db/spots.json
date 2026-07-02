@@ -39,7 +39,13 @@
     "image": "/assets/spots/placeholder.jpg",
     "rating": 0,
     "reviewsCount": 0,
-    "going": []
+    "going": [
+      {
+        "username": "Ahmed112233",
+        "time": "18:00",
+        "date": "2026-07-02"
+      }
+    ]
   },
   {
     "id": "spot-egypt-3",

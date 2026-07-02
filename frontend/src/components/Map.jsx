@@ -647,6 +647,7 @@ export default function Map({
   return (
     <div className="map-view-container">
       <div className="map-container-wrapper">
+        <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }}></div>
         <div className="map-search-overlay">
           <form onSubmit={handleSearchSubmit} className="map-search-card" style={{ marginBottom: 0 }}>
             <input
@@ -780,8 +781,6 @@ export default function Map({
             <Globe size={14} /> Satellite
           </button>
         </div>
-
-        <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }}></div>
       </div>
 
       {/* Side panel */}

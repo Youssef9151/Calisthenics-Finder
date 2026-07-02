@@ -30,6 +30,10 @@ export default function App() {
   const [activeChat, setActiveChat] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState({});
 
+  const getPrivateRoomId = (user1, user2) => {
+    return `private_${[user1.toLowerCase(), user2.toLowerCase()].sort().join('_')}`;
+  };
+
   const activeTabRef = useRef(activeTab);
   const activeChatRef = useRef(activeChat);
 
@@ -42,8 +46,7 @@ export default function App() {
       if (activeChat.type === 'group') {
         room = activeChat.data.id;
       } else {
-        const sorted = [user.username, activeChat.data.name].sort();
-        room = `private-${sorted[0]}-${sorted[1]}`;
+        room = getPrivateRoomId(user.username, activeChat.data.name);
       }
       setUnreadCounts(prev => {
         if (prev[room]) {
@@ -62,8 +65,7 @@ export default function App() {
       if (activeChat.type === 'group') {
         room = activeChat.data.id;
       } else {
-        const sorted = [user.username, activeChat.data.name].sort();
-        room = `private-${sorted[0]}-${sorted[1]}`;
+        room = getPrivateRoomId(user.username, activeChat.data.name);
       }
       setUnreadCounts(prev => {
         if (prev[room]) {
@@ -175,8 +177,7 @@ export default function App() {
           if (currentChat.type === 'group') {
             currentRoom = currentChat.data.id;
           } else {
-            const sorted = [user.username, currentChat.data.name].sort();
-            currentRoom = `private-${sorted[0]}-${sorted[1]}`;
+            currentRoom = getPrivateRoomId(user.username, currentChat.data.name);
           }
         }
         if (currentTab !== 'chat' || currentRoom !== msg.room) {
